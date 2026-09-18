@@ -1,98 +1,89 @@
-﻿using TacticalTanks.Api.Models;
+﻿using System.Collections;
 using TacticalTanks.Api.Interfaces;
-using System.Drawing;
-using System.Diagnostics.Eventing.Reader;
+using TacticalTanks.Api.Models;
 
 namespace TacticalTanks.Api.Engine
 {
     public class GameEngine : IGameEngine
     {
+        private readonly IEnumerable _obstacles;
+        private readonly IEnumerable _tanks;
 
-        
-        private bool IsTileBlocked(Position tile)
+        public GameEngine(IEnumerable<Obstacle> obstacles, IEnumerable<ITank> tanks)
         {
-            // TO DO
-            return true;
+            _obstacles = obstacles;
+            _tanks = tanks;
         }
-        private bool HasClearLineOfFire(Position from, Position to)
+
+        private bool IsThereObstacle(IEnumerable<Position> points, IEnumerable<Obstacle> obstacles)
         {
-            int x0 = from.X;
-            int y0 = from.Y;
-            int x1 = to.X;
-            int y1 = to.Y;
+            var obstaclePositions = obstacles.Select(o => o.Positioning).ToHashSet();
+            return points.Any(p => obstaclePositions.Contains(p));
+        }
 
-            int dx = Math.Abs(x1 - x0);
-            int dy = Math.Abs(y1 - y0);
+        private IEnumerable<Position> LineOfShoot(Position from, Position to)
+        {
+            var linePoints = new List<Position>();
 
-            int sx = x0 < x1 ? 1 : -1;
-            int sy = y0 < y1 ? 1 : -1;
-
+            int x = from.X;
+            int y = from.Y;
+            int dx = Math.Abs(to.X - from.X);
+            int dy = Math.Abs(to.Y - from.Y);
+            int sx = from.X < to.X ? 1 : -1;
+            int sy = from.Y < to.Y ? 1 : -1;
             int err = dx - dy;
 
             while (true)
             {
-                Position currentStep = new Position(x0, y0);
-                if (currentStep != from && currentStep != to)
-                {
-                    if (IsTileBlocked(currentStep))
-                    {
-                        return false;
-                    }
-                }
+                linePoints.Add(new Position(x, y));
 
-                if (x0 == x1 && y0 == y1)
-                {
+                if (x == to.X && y == to.Y)
                     break;
-                }
 
                 int e2 = 2 * err;
 
                 if (e2 > -dy)
                 {
                     err -= dy;
-                    x0 += sx;
+                    x += sx;
                 }
 
                 if (e2 < dx)
                 {
                     err += dx;
-                    y0 += sy;
+                    y += sy;
                 }
             }
 
-            return true;
+            return linePoints;
         }
-        private bool CanShoot(ITank attacker, ITank target, int gunRange)
+
+        private bool CanShoot(ITank attacker, ITank target, IEnumerable<Obstacle> obstacles)
         {
             double distance = attacker.Positioning.EuclideanDistance(target.Positioning);
-            if (distance > gunRange)
+
+            if (distance > attacker.GunRange)
             {
                 return false;
             }
-            else
-            {
-                bool isLineOfFireIsClear = HasClearLineOfFire(attacker.Positioning, target.Positioning);
-                if (isLineOfFireIsClear)
-                {
-                    return true;
-                }
-                else
-                {
-                    return false;
-                }
-            }
-        }
-        public void Shoot(ITank attacker, ITank target )
-        {
-            if(CanShoot(attacker, target, attacker.GunRange) == true)
-            {
-                //TO DO
-            }
-            else
-            {
-                //TO DO
-            }
+
+            var trajectory = LineOfShoot(attacker.Positioning, target.Positioning);
+
+            return !IsThereObstacle(trajectory, obstacles);
         }
 
+        public void Shoot(ITank attacker, ITank target)
+        {
+            if (CanShoot(attacker, target, _obstacles))
+            {
+                target.TakeDamage(attacker.Damage);
+            }
+            else
+            {
+
+            }
+        }
     }
+
+
 }
